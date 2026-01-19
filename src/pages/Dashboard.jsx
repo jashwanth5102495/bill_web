@@ -25,6 +25,7 @@ export default function Dashboard() {
   const [owners, setOwners] = useState([]);
   const [businessOwners, setBusinessOwners] = useState([]);
   const [loading, setLoading] = useState(true);
+  const API_ROOT = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
   const [formData, setFormData] = useState({
     username: '',
     password: '',
@@ -76,6 +77,11 @@ export default function Dashboard() {
   const [runningAdsLoading, setRunningAdsLoading] = useState(false);
   const [runningAdsTab, setRunningAdsTab] = useState('bookings'); // bookings, active, availability
 
+  // Business Owner Modal State
+  const [selectedBusinessOwner, setSelectedBusinessOwner] = useState(null);
+  const [businessOwnerDetails, setBusinessOwnerDetails] = useState(null);
+  const [loadingOwnerDetails, setLoadingOwnerDetails] = useState(false);
+
   const navigate = useNavigate();
 
   const handleLogout = useCallback(() => {
@@ -97,6 +103,70 @@ export default function Dashboard() {
       setLoading(false);
     }
   }, []);
+
+  const handleBusinessOwnerClick = async (owner) => {
+    setSelectedBusinessOwner(owner);
+    setLoadingOwnerDetails(true);
+
+    try {
+      let details = null;
+
+      // Try primary backend endpoint first
+      try {
+        const response = await api.get(`/admin/users/${owner._id}/details`);
+        if (response.data?.success) {
+          details = response.data;
+        }
+      } catch (err) {
+        console.error('Primary owner details fetch failed, falling back to aggregated data:', err);
+      }
+
+      // Fallback: build details from existing business owner data + bookings
+      if (!details) {
+        const bookingsRes = await api.get('/admin/bookings');
+        const bookings = bookingsRes.data?.success ? bookingsRes.data.bookings || [] : [];
+
+        const ownerBookings = bookings.filter((b) => {
+          if (!b.userId) return false;
+          const id = typeof b.userId === 'string' ? b.userId : b.userId._id;
+          return id?.toString() === owner._id?.toString();
+        });
+
+        const totalSpent = ownerBookings.reduce(
+          (sum, b) => sum + (b.price || b.amount || 0),
+          0
+        );
+
+        const activeAds = ownerBookings.filter((b) =>
+          ['active', 'confirmed', 'paid', 'in-progress'].includes(
+            (b.status || '').toLowerCase()
+          )
+        ).length;
+
+        details = {
+          user: {
+            name: owner.name || owner.businessProfile?.ownerName || '',
+            email: owner.email || owner.businessProfile?.email || '',
+            phoneNumber: owner.phoneNumber || '',
+          },
+          profile: owner.businessProfile || null,
+          bookings: ownerBookings,
+          stats: {
+            totalAds: ownerBookings.length,
+            totalSpent,
+            activeAds,
+          },
+        };
+      }
+
+      setBusinessOwnerDetails(details);
+    } catch (error) {
+      console.error('Error preparing business owner details:', error);
+      alert(error.response?.data?.message || 'Failed to fetch details');
+    } finally {
+      setLoadingOwnerDetails(false);
+    }
+  };
 
   const fetchRequests = useCallback(async () => {
     setRequestsLoading(true);
@@ -255,6 +325,52 @@ export default function Dashboard() {
     }
   };
 
+  const handleBillboardImageChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append('image', file);
+
+    try {
+      const response = await api.post('/upload/image', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+
+      if (response.data?.success && response.data.url) {
+        setBillboardForm(prev => ({ ...prev, image: response.data.url }));
+      } else {
+        alert('Failed to upload image');
+      }
+    } catch (error) {
+      console.error('Error uploading image:', error);
+      alert('Image upload failed');
+    }
+  };
+
+  const handleNewBillboardImageChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append('image', file);
+
+    try {
+      const response = await api.post('/upload/image', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+
+      if (response.data?.success && response.data.url) {
+        setNewBillboardData(prev => ({ ...prev, image: response.data.url }));
+      } else {
+        alert('Failed to upload image');
+      }
+    } catch (error) {
+      console.error('Error uploading image:', error);
+      alert('Image upload failed');
+    }
+  };
+
   const handleBillboardSubmit = async (e) => {
     e.preventDefault();
     try {
@@ -300,6 +416,38 @@ export default function Dashboard() {
      } catch (error) {
       alert(error.response?.data?.message || 'Failed to save billboard');
     }
+  };
+
+  const ImageUploadField = ({ id, image, onChange, title, description }) => {
+    const resolvedSrc = image && (image.startsWith('http') ? image : `${API_ROOT}${image}`);
+
+    return (
+      <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+        <label htmlFor={id} className="upload-area">
+          <div className="upload-area-icon">
+            <ImageIcon size={22} />
+          </div>
+          <div className="upload-area-text">
+            <div className="upload-area-title">{title}</div>
+            <div className="upload-area-desc">{description}</div>
+          </div>
+        </label>
+        <input
+          id={id}
+          type="file"
+          accept="image/*"
+          onChange={onChange}
+          style={{ display: 'none' }}
+        />
+        {resolvedSrc && (
+          <img
+            src={resolvedSrc}
+            alt="Billboard"
+            style={{ marginTop: '10px', maxWidth: '100%', borderRadius: '8px' }}
+          />
+        )}
+      </div>
+    );
   };
 
   const renderEditModal = () => {
@@ -507,6 +655,14 @@ export default function Dashboard() {
                           value={billboardForm.dailyFootfall} onChange={e => setBillboardForm({...billboardForm, dailyFootfall: e.target.value})} />
                       </div>
 
+                      <ImageUploadField
+                        id="billboard-image"
+                        image={billboardForm.image}
+                        onChange={handleBillboardImageChange}
+                        title={billboardForm.image ? 'Change billboard image' : 'Upload billboard image'}
+                        description="PNG or JPG up to 10MB"
+                      />
+
                       <div className="form-group" style={{ gridColumn: '1 / -1' }}>
                         <textarea className="form-input" placeholder="Description" rows="3"
                           value={billboardForm.description} onChange={e => setBillboardForm({...billboardForm, description: e.target.value})}></textarea>
@@ -707,10 +863,10 @@ export default function Dashboard() {
                     <tr key={booking._id}>
                       <td>{new Date(booking.createdAt).toLocaleDateString()}</td>
                       <td>
-                        <div style={{ fontWeight: 500 }}>{booking.billboardId?.name || 'Unknown'}</div>
-                        <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{booking.billboardId?.location}</div>
+                        <div style={{ fontWeight: 500 }}>{booking.billboardId?.name || booking.billboardName || 'Unknown'}</div>
+                        <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{booking.billboardId?.location || booking.location}</div>
                       </td>
-                      <td>{booking.userId?.name || 'Unknown'}</td>
+                      <td>{booking.userId?.name || booking.userId?.username || 'Unknown'}</td>
                       <td>{renderContentCell(booking)}</td>
                       <td>
                         {new Date(booking.startDate).toLocaleDateString()} - {new Date(booking.endDate).toLocaleDateString()}
@@ -760,10 +916,10 @@ export default function Dashboard() {
                     return (
                       <tr key={booking._id}>
                         <td>
-                          <div style={{ fontWeight: 500 }}>{booking.billboardId?.name || 'Unknown'}</div>
-                          <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{booking.billboardId?.location}</div>
+                          <div style={{ fontWeight: 500 }}>{booking.billboardId?.name || booking.billboardName || 'Unknown'}</div>
+                          <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{booking.billboardId?.location || booking.location}</div>
                         </td>
-                        <td>{booking.userId?.name || 'Unknown'}</td>
+                        <td>{booking.userId?.name || booking.userId?.username || 'Unknown'}</td>
                         <td>{renderContentCell(booking)}</td>
                         <td>
                           {new Date(booking.startDate).toLocaleDateString()} - {new Date(booking.endDate).toLocaleDateString()}
@@ -837,6 +993,119 @@ export default function Dashboard() {
     </div>
   );
 
+  const renderBusinessOwnerDetailsModal = () => {
+    if (!selectedBusinessOwner) return null;
+
+    return (
+      <div className={`modal-overlay ${selectedBusinessOwner ? 'active' : ''}`} onClick={() => setSelectedBusinessOwner(null)}>
+        <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '800px', width: '90%' }}>
+          <div className="modal-header">
+            <h3>Business Owner Details</h3>
+            <button className="close-btn" onClick={() => setSelectedBusinessOwner(null)}>&times;</button>
+          </div>
+          
+          {loadingOwnerDetails ? (
+            <div style={{ padding: '20px', textAlign: 'center' }}>Loading details...</div>
+          ) : businessOwnerDetails ? (
+            <div className="modal-body" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
+              <div className="detail-section">
+                <h4>Profile Information</h4>
+                <div className="grid-2-col">
+                  <div className="detail-item">
+                    <label>Name</label>
+                    <p>{businessOwnerDetails.user?.name}</p>
+                  </div>
+                  <div className="detail-item">
+                    <label>Email</label>
+                    <p>{businessOwnerDetails.user?.email}</p>
+                  </div>
+                  <div className="detail-item">
+                    <label>Phone</label>
+                    <p>{businessOwnerDetails.user?.phoneNumber}</p>
+                  </div>
+                  <div className="detail-item">
+                    <label>Business Name</label>
+                    <p>{businessOwnerDetails.profile?.businessName || 'N/A'}</p>
+                  </div>
+                  <div className="detail-item">
+                    <label>Business Type</label>
+                    <p>{businessOwnerDetails.profile?.businessType || 'N/A'}</p>
+                  </div>
+                  <div className="detail-item">
+                    <label>Address</label>
+                    <p>
+                      {[
+                        businessOwnerDetails.profile?.city,
+                        businessOwnerDetails.profile?.state,
+                        businessOwnerDetails.profile?.pincode
+                      ].filter(Boolean).join(', ') || 'N/A'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="detail-section" style={{ marginTop: '20px' }}>
+                <h4>Statistics</h4>
+                <div className="stats-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '15px' }}>
+                  <div className="stat-card" style={{ padding: '15px', background: 'var(--bg-secondary)', borderRadius: '8px', textAlign: 'center' }}>
+                    <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#3B82F6' }}>{businessOwnerDetails.stats?.totalAds || 0}</div>
+                    <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Total Ads Played</div>
+                  </div>
+                  <div className="stat-card" style={{ padding: '15px', background: 'var(--bg-secondary)', borderRadius: '8px', textAlign: 'center' }}>
+                    <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#10B981' }}>{businessOwnerDetails.stats?.activeAds || 0}</div>
+                    <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Active Ads</div>
+                  </div>
+                  <div className="stat-card" style={{ padding: '15px', background: 'var(--bg-secondary)', borderRadius: '8px', textAlign: 'center' }}>
+                    <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#F59E0B' }}>₹{businessOwnerDetails.stats?.totalSpent || 0}</div>
+                    <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Total Spent</div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="detail-section" style={{ marginTop: '20px' }}>
+                <h4>Booking History & Payments</h4>
+                {businessOwnerDetails.bookings?.length > 0 ? (
+                  <table className="owner-table" style={{ fontSize: '13px' }}>
+                    <thead>
+                      <tr>
+                        <th>Date</th>
+                        <th>Billboard</th>
+                        <th>Amount</th>
+                        <th>Payment ID</th>
+                        <th>Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {businessOwnerDetails.bookings.map(booking => (
+                        <tr key={booking._id}>
+                          <td>{new Date(booking.createdAt).toLocaleDateString()}</td>
+                          <td>{booking.billboardId?.name || booking.billboardName || 'Unknown'}</td>
+                          <td>₹{booking.price || booking.amount || 0}</td>
+                          <td style={{ fontFamily: 'monospace', fontSize: '12px' }}>
+                            {booking.razorpayPaymentId || booking.paymentId || '-'}
+                          </td>
+                          <td>
+                            <span className={`status-badge status-${booking.status.toLowerCase()}`}>
+                              {booking.status}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                ) : (
+                  <p className="text-muted">No booking history found.</p>
+                )}
+              </div>
+            </div>
+          ) : (
+             <div style={{ padding: '20px', textAlign: 'center' }}>Failed to load details.</div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   const renderBusinessOwnersContent = () => (
     <div className="list-container">
       <div className="list-header">
@@ -849,8 +1118,12 @@ export default function Dashboard() {
         <table className="owner-table">
           <thead>
             <tr>
-              <th>Name</th>
-              <th>Username</th>
+              <th>Owner Name</th>
+              <th>Business Name</th>
+              <th>Business Type</th>
+              <th>City</th>
+              <th>State</th>
+              <th>PIN Code</th>
               <th>Phone</th>
               <th>Email</th>
               <th>Status</th>
@@ -860,8 +1133,24 @@ export default function Dashboard() {
           <tbody>
             {businessOwners.map((owner) => (
               <tr key={owner._id}>
-                <td>{owner.name || 'N/A'}</td>
-                <td>{owner.username || 'N/A'}</td>
+                <td>
+                  <span 
+                    onClick={() => handleBusinessOwnerClick(owner)} 
+                    style={{ 
+                      cursor: 'pointer', 
+                      color: '#3B82F6', 
+                      fontWeight: 500,
+                      textDecoration: 'underline' 
+                    }}
+                  >
+                    {owner.name || owner.businessProfile?.ownerName || 'N/A'}
+                  </span>
+                </td>
+                <td>{owner.businessProfile?.businessName || 'N/A'}</td>
+                <td>{owner.businessProfile?.businessType || 'N/A'}</td>
+                <td>{owner.businessProfile?.city || 'N/A'}</td>
+                <td>{owner.businessProfile?.state || 'N/A'}</td>
+                <td>{owner.businessProfile?.pincode || 'N/A'}</td>
                 <td>{owner.phoneNumber || 'N/A'}</td>
                 <td>{owner.email || 'N/A'}</td>
                 <td>
@@ -1098,6 +1387,14 @@ export default function Dashboard() {
                                 value={newBillboardData.dailyFootfall} onChange={e => setNewBillboardData({...newBillboardData, dailyFootfall: e.target.value})} />
                             </div>
 
+                            <ImageUploadField
+                              id="new-billboard-image"
+                              image={newBillboardData.image}
+                              onChange={handleNewBillboardImageChange}
+                              title={newBillboardData.image ? 'Change billboard image' : 'Upload billboard image'}
+                              description="PNG or JPG up to 10MB"
+                            />
+
                              <div className="form-group" style={{ gridColumn: '1 / -1' }}>
                                 <textarea className="form-input" placeholder="Description" rows="2"
                                 value={newBillboardData.description} onChange={e => setNewBillboardData({...newBillboardData, description: e.target.value})}></textarea>
@@ -1222,6 +1519,8 @@ export default function Dashboard() {
 
         {activeTab === 'running-ads' && renderRunningAdsContent()}
       </main>
+      
+      {renderBusinessOwnerDetailsModal()}
     </div>
   );
 }
