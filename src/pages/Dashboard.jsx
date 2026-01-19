@@ -850,6 +850,7 @@ export default function Dashboard() {
                   <tr>
                     <th>Date Booked</th>
                     <th>Billboard</th>
+                    <th>Location</th>
                     <th>Business Owner</th>
                     <th>Ad Content</th>
                     <th>Schedule</th>
@@ -864,9 +865,19 @@ export default function Dashboard() {
                       <td>{new Date(booking.createdAt).toLocaleDateString()}</td>
                       <td>
                         <div style={{ fontWeight: 500 }}>{booking.billboardId?.name || booking.billboardName || 'Unknown'}</div>
-                        <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{booking.billboardId?.location || booking.location}</div>
                       </td>
-                      <td>{booking.userId?.name || booking.userId?.username || 'Unknown'}</td>
+                      <td>
+                        <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{booking.billboardId?.location || booking.location || 'Unknown Location'}</div>
+                      </td>
+                      <td>
+                        {booking.userId?.name || 
+                         booking.ownerName || 
+                         booking.businessName || 
+                         booking.userId?.username || 
+                         booking.userId?.email || 
+                         booking.userId?.phoneNumber || 
+                         'Unknown'}
+                      </td>
                       <td>{renderContentCell(booking)}</td>
                       <td>
                         {new Date(booking.startDate).toLocaleDateString()} - {new Date(booking.endDate).toLocaleDateString()}
@@ -898,6 +909,7 @@ export default function Dashboard() {
                 <thead>
                   <tr>
                     <th>Billboard</th>
+                    <th>Location</th>
                     <th>Business Owner</th>
                     <th>Ad Content</th>
                     <th>Campaign Schedule</th>
@@ -917,9 +929,19 @@ export default function Dashboard() {
                       <tr key={booking._id}>
                         <td>
                           <div style={{ fontWeight: 500 }}>{booking.billboardId?.name || booking.billboardName || 'Unknown'}</div>
-                          <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{booking.billboardId?.location || booking.location}</div>
                         </td>
-                        <td>{booking.userId?.name || booking.userId?.username || 'Unknown'}</td>
+                        <td>
+                          <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{booking.billboardId?.location || booking.location || 'Unknown Location'}</div>
+                        </td>
+                        <td>
+                          {booking.userId?.name || 
+                           booking.ownerName || 
+                           booking.businessName || 
+                           booking.userId?.username || 
+                           booking.userId?.email || 
+                           booking.userId?.phoneNumber || 
+                           'Unknown'}
+                        </td>
                         <td>{renderContentCell(booking)}</td>
                         <td>
                           {new Date(booking.startDate).toLocaleDateString()} - {new Date(booking.endDate).toLocaleDateString()}
@@ -1035,6 +1057,7 @@ export default function Dashboard() {
                     <label>Address</label>
                     <p>
                       {[
+                        businessOwnerDetails.profile?.address,
                         businessOwnerDetails.profile?.city,
                         businessOwnerDetails.profile?.state,
                         businessOwnerDetails.profile?.pincode
@@ -1070,6 +1093,7 @@ export default function Dashboard() {
                       <tr>
                         <th>Date</th>
                         <th>Billboard</th>
+                        <th>Location</th>
                         <th>Amount</th>
                         <th>Payment ID</th>
                         <th>Status</th>
@@ -1079,7 +1103,12 @@ export default function Dashboard() {
                       {businessOwnerDetails.bookings.map(booking => (
                         <tr key={booking._id}>
                           <td>{new Date(booking.createdAt).toLocaleDateString()}</td>
-                          <td>{booking.billboardId?.name || booking.billboardName || 'Unknown'}</td>
+                          <td>
+                            <div style={{ fontWeight: 500 }}>{booking.billboardId?.name || booking.billboardName || 'Unknown'}</div>
+                          </td>
+                          <td>
+                            <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{booking.billboardId?.location || booking.location || 'Unknown Location'}</div>
+                          </td>
                           <td>₹{booking.price || booking.amount || 0}</td>
                           <td style={{ fontFamily: 'monospace', fontSize: '12px' }}>
                             {booking.razorpayPaymentId || booking.paymentId || '-'}
