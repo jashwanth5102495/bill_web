@@ -15,8 +15,28 @@ import {
   Download,
   PlayCircle,
   Image as ImageIcon,
-  FileText
+  FileText,
+  BarChart2,
+  PieChart as PieChartIcon,
+  TrendingUp
 } from 'lucide-react';
+import { 
+  BarChart, 
+  Bar, 
+  XAxis, 
+  YAxis, 
+  CartesianGrid, 
+  Tooltip, 
+  Legend, 
+  ResponsiveContainer, 
+  PieChart, 
+  Pie, 
+  Cell,
+  LineChart,
+  Line,
+  AreaChart,
+  Area
+} from 'recharts';
 import api from '../api';
 import './Dashboard.css';
 
@@ -77,6 +97,10 @@ export default function Dashboard() {
   const [runningAdsLoading, setRunningAdsLoading] = useState(false);
   const [runningAdsTab, setRunningAdsTab] = useState('bookings'); // bookings, active, availability
 
+  // Analysis State
+  const [analysisData, setAnalysisData] = useState(null);
+  const [analysisLoading, setAnalysisLoading] = useState(false);
+
   // Business Owner Modal State
   const [selectedBusinessOwner, setSelectedBusinessOwner] = useState(null);
   const [businessOwnerDetails, setBusinessOwnerDetails] = useState(null);
@@ -89,6 +113,17 @@ export default function Dashboard() {
     localStorage.removeItem('adminUser');
     navigate('/login');
   }, [navigate]);
+
+  const fetchAnalysis = useCallback(async () => {
+    try {
+      const response = await api.get('/admin/latest-analysis');
+      if (response.data.success && response.data.analysis) {
+        setAnalysisData(response.data.analysis);
+      }
+    } catch (error) {
+      console.error('Error fetching analysis:', error);
+    }
+  }, []);
 
   const fetchBusinessOwners = useCallback(async () => {
     setLoading(true);
@@ -290,7 +325,8 @@ export default function Dashboard() {
     } else if (activeTab === 'business-owners') {
       fetchBusinessOwners();
     }
-  }, [activeTab, fetchOwners, fetchRequests, fetchRunningAdsData, fetchBusinessOwners]);
+    fetchAnalysis();
+  }, [activeTab, fetchOwners, fetchRequests, fetchRunningAdsData, fetchBusinessOwners, fetchAnalysis]);
 
   const handleCreateOwner = async (e) => {
     e.preventDefault();
@@ -859,6 +895,124 @@ export default function Dashboard() {
     return <span style={{ color: '#9CA3AF', fontSize: '12px' }}>No Content</span>;
   };
 
+  const renderAnalysisCharts = () => {
+    if (!analysisData) return (
+      <div className="analysis-empty">
+        <TrendingUp size={48} color="#9CA3AF" />
+        <p>No analysis data available yet. Click "Analyze with n8n" to generate one.</p>
+      </div>
+    );
+
+    const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8'];
+
+    return (
+      <div className="analysis-grid">
+        {/* Sales Summary Cards */}
+        <div className="stats-cards">
+          <div className="stat-card">
+            <div className="stat-icon" style={{ backgroundColor: 'rgba(59, 130, 246, 0.1)', color: '#3B82F6' }}>
+              <TrendingUp size={20} />
+            </div>
+            <div className="stat-info">
+              <span className="stat-label">Total Revenue</span>
+              <span className="stat-value">₹{analysisData.totalRevenue?.toLocaleString() || 0}</span>
+            </div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-icon" style={{ backgroundColor: 'rgba(16, 185, 129, 0.1)', color: '#10B981' }}>
+              <ClipboardList size={20} />
+            </div>
+            <div className="stat-info">
+              <span className="stat-label">Total Bookings</span>
+              <span className="stat-value">{analysisData.totalBookings || 0}</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="charts-container">
+          {/* Daily Sales Chart */}
+          {analysisData.dailySales && (
+            <div className="chart-card">
+              <h4>Daily Sales Trend</h4>
+              <div style={{ width: '100%', height: 300 }}>
+                <ResponsiveContainer>
+                  <AreaChart data={analysisData.dailySales}>
+                    <defs>
+                      <linearGradient id="colorSales" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#8B5CF6" stopOpacity={0.8}/>
+                        <stop offset="95%" stopColor="#8B5CF6" stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#374151" />
+                    <XAxis dataKey="date" stroke="#9CA3AF" fontSize={12} tickLine={false} axisLine={false} />
+                    <YAxis stroke="#9CA3AF" fontSize={12} tickLine={false} axisLine={false} />
+                    <Tooltip 
+                      contentStyle={{ backgroundColor: '#1F2937', border: 'none', borderRadius: '8px', color: '#fff' }}
+                      itemStyle={{ color: '#fff' }}
+                    />
+                    <Area type="monotone" dataKey="sales" stroke="#8B5CF6" fillOpacity={1} fill="url(#colorSales)" />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          )}
+
+          <div className="secondary-charts">
+            {/* Bookings Status Distribution */}
+            {analysisData.bookingsByStatus && (
+              <div className="chart-card half">
+                <h4>Booking Status Distribution</h4>
+                <div style={{ width: '100%', height: 250 }}>
+                  <ResponsiveContainer>
+                    <PieChart>
+                      <Pie
+                        data={analysisData.bookingsByStatus}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={60}
+                        outerRadius={80}
+                        paddingAngle={5}
+                        dataKey="value"
+                      >
+                        {analysisData.bookingsByStatus.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip 
+                        contentStyle={{ backgroundColor: '#1F2937', border: 'none', borderRadius: '8px', color: '#fff' }}
+                      />
+                      <Legend verticalAlign="bottom" height={36}/>
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            )}
+
+            {/* Billboard Popularity */}
+            {analysisData.topBillboards && (
+              <div className="chart-card half">
+                <h4>Top Performing Billboards</h4>
+                <div style={{ width: '100%', height: 250 }}>
+                  <ResponsiveContainer>
+                    <BarChart data={analysisData.topBillboards} layout="vertical">
+                      <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#374151" />
+                      <XAxis type="number" hide />
+                      <YAxis dataKey="name" type="category" stroke="#9CA3AF" fontSize={10} width={100} />
+                      <Tooltip 
+                        contentStyle={{ backgroundColor: '#1F2937', border: 'none', borderRadius: '8px', color: '#fff' }}
+                      />
+                      <Bar dataKey="bookings" fill="#3B82F6" radius={[0, 4, 4, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const renderRunningAdsContent = () => (
     <div className="list-container">
       <div className="list-header" style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
@@ -906,6 +1060,20 @@ export default function Dashboard() {
             Availability ({availability.length})
           </div>
         </div>
+      </div>
+
+      {/* Analysis Visualization Section */}
+      <div className="analysis-section" style={{ marginBottom: '30px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
+          <BarChart2 size={24} color="#8B5CF6" />
+          <h3 style={{ margin: 0, fontSize: '18px' }}>Data Insights & Analysis</h3>
+          {analysisData && (
+            <span style={{ fontSize: '12px', color: '#9CA3AF', marginLeft: 'auto' }}>
+              Last updated: {new Date(analysisData.timestamp).toLocaleString()}
+            </span>
+          )}
+        </div>
+        {renderAnalysisCharts()}
       </div>
 
       {runningAdsLoading ? (
