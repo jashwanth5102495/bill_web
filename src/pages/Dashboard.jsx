@@ -100,6 +100,7 @@ export default function Dashboard() {
   // Analysis State
   const [analysisData, setAnalysisData] = useState(null);
   const [analysisLoading, setAnalysisLoading] = useState(false);
+  const [telegramChatId, setTelegramChatId] = useState(localStorage.getItem('telegramChatId') || '');
 
   // Business Owner Modal State
   const [selectedBusinessOwner, setSelectedBusinessOwner] = useState(null);
@@ -302,8 +303,19 @@ export default function Dashboard() {
   };
 
   const handleAnalyzeWithN8N = async () => {
+    let currentChatId = telegramChatId;
+    
+    if (!currentChatId) {
+      const inputId = prompt('Please enter your Telegram Chat ID (to send CSV for analysis):');
+      if (!inputId) return;
+      currentChatId = inputId;
+      setTelegramChatId(inputId);
+      localStorage.setItem('telegramChatId', inputId);
+    }
+
+    setAnalysisLoading(true);
     try {
-      const response = await api.post('/admin/analyze-with-n8n');
+      const response = await api.post('/admin/analyze-with-n8n', { chat_id: currentChatId });
       if (response.data.success) {
         alert('CSV data has been sent to n8n via Telegram for analysis!');
       } else {
@@ -312,6 +324,8 @@ export default function Dashboard() {
     } catch (error) {
       console.error('Error analyzing with n8n:', error);
       alert(error.response?.data?.message || 'Failed to send data to n8n. Please ensure the backend is running.');
+    } finally {
+      setAnalysisLoading(false);
     }
   };
 
@@ -907,6 +921,27 @@ export default function Dashboard() {
 
     return (
       <div className="analysis-grid">
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', gridColumn: '1 / -1' }}>
+          <h3 style={{ margin: 0, color: 'var(--text-primary)' }}>Latest Analysis Results</h3>
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <button 
+              className="btn-secondary" 
+              onClick={fetchAnalysis}
+              style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 16px' }}
+            >
+              <TrendingUp size={16} /> Refresh
+            </button>
+            <button 
+              className="btn-primary" 
+              onClick={handleAnalyzeWithN8N}
+              disabled={analysisLoading}
+              style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 16px', backgroundColor: '#8B5CF6' }}
+            >
+              {analysisLoading ? <div className="spinner-small" /> : <BarChart2 size={16} />}
+              {analysisLoading ? 'Sending...' : 'Analyze with n8n'}
+            </button>
+          </div>
+        </div>
         {/* Sales Summary Cards */}
         <div className="stats-cards">
           <div className="stat-card">
@@ -1022,10 +1057,11 @@ export default function Dashboard() {
             <button 
               className="btn-primary" 
               onClick={handleAnalyzeWithN8N}
+              disabled={analysisLoading}
               style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 16px', fontSize: '14px', backgroundColor: '#8B5CF6' }} // Purple for n8n
             >
-              <PlayCircle size={18} />
-              Analyze with n8n
+              {analysisLoading ? <div className="spinner-small" /> : <PlayCircle size={18} />}
+              {analysisLoading ? 'Sending...' : 'Analyze with n8n'}
             </button>
             <button 
               className="btn-primary" 
