@@ -317,7 +317,12 @@ export default function Dashboard() {
     try {
       const response = await api.post('/admin/analyze-with-n8n', { chat_id: currentChatId });
       if (response.data.success) {
-        alert('CSV data has been sent to n8n via Telegram for analysis!');
+        if (response.data.analysis) {
+          setAnalysisData(response.data.analysis);
+          alert('Analysis complete! Data has been updated.');
+        } else {
+          alert('CSV data has been sent to n8n. Please check back in a few seconds for results.');
+        }
       } else {
         alert('Failed to send data to n8n: ' + response.data.message);
       }
@@ -919,6 +924,27 @@ export default function Dashboard() {
 
     const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8'];
 
+    // Map new format to old format for charts
+    const totalRevenue = analysisData.total_sales || analysisData.totalRevenue || 0;
+    const totalBookings = analysisData.orders || analysisData.totalBookings || 0;
+    const growthRate = analysisData.growth_rate;
+    const avgOrder = analysisData.average;
+
+    let salesTrend = analysisData.dailySales || [];
+    if (analysisData.monthly_sales && salesTrend.length === 0) {
+      salesTrend = Object.entries(analysisData.monthly_sales).map(([date, sales]) => ({ date, sales }));
+    }
+
+    let statusData = analysisData.bookingsByStatus || [];
+    if (statusData.length === 0 && analysisData.orders) {
+      statusData = [{ name: 'Total Orders', value: analysisData.orders }];
+    }
+
+    let topPerforming = analysisData.topBillboards || [];
+    if (analysisData.top_products && topPerforming.length === 0) {
+      topPerforming = analysisData.top_products.map(p => ({ name: p.name, value: p.revenue }));
+    }
+
     return (
       <div className="analysis-grid">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', gridColumn: '1 / -1' }}>
@@ -942,6 +968,7 @@ export default function Dashboard() {
             </button>
           </div>
         </div>
+
         {/* Sales Summary Cards */}
         <div className="stats-cards">
           <div className="stat-card">
@@ -949,8 +976,8 @@ export default function Dashboard() {
               <TrendingUp size={20} />
             </div>
             <div className="stat-info">
-              <span className="stat-label">Total Revenue</span>
-              <span className="stat-value">₹{analysisData.totalRevenue?.toLocaleString() || 0}</span>
+              <span className="stat-label">Total Sales</span>
+              <span className="stat-value">₹{totalRevenue.toLocaleString()}</span>
             </div>
           </div>
           <div className="stat-card">
@@ -958,20 +985,44 @@ export default function Dashboard() {
               <ClipboardList size={20} />
             </div>
             <div className="stat-info">
-              <span className="stat-label">Total Bookings</span>
-              <span className="stat-value">{analysisData.totalBookings || 0}</span>
+              <span className="stat-label">Total Orders</span>
+              <span className="stat-value">{totalBookings}</span>
             </div>
           </div>
+          {avgOrder && (
+            <div className="stat-card">
+              <div className="stat-icon" style={{ backgroundColor: 'rgba(245, 158, 11, 0.1)', color: '#F59E0B' }}>
+                <BarChart2 size={20} />
+              </div>
+              <div className="stat-info">
+                <span className="stat-label">Avg. Order Value</span>
+                <span className="stat-value">₹{Math.round(avgOrder).toLocaleString()}</span>
+              </div>
+            </div>
+          )}
+          {growthRate !== undefined && (
+            <div className="stat-card">
+              <div className="stat-icon" style={{ backgroundColor: 'rgba(139, 92, 246, 0.1)', color: '#8B5CF6' }}>
+                <TrendingUp size={20} />
+              </div>
+              <div className="stat-info">
+                <span className="stat-label">Growth Rate</span>
+                <span className="stat-value" style={{ color: growthRate >= 0 ? '#10B981' : '#EF4444' }}>
+                  {growthRate > 0 ? '+' : ''}{growthRate}%
+                </span>
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="charts-container">
-          {/* Daily Sales Chart */}
-          {analysisData.dailySales && (
+          {/* Sales Trend Chart */}
+          {salesTrend.length > 0 && (
             <div className="chart-card">
-              <h4>Daily Sales Trend</h4>
+              <h4>Sales Trend</h4>
               <div style={{ width: '100%', height: 300 }}>
                 <ResponsiveContainer>
-                  <AreaChart data={analysisData.dailySales}>
+                  <AreaChart data={salesTrend}>
                     <defs>
                       <linearGradient id="colorSales" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="5%" stopColor="#8B5CF6" stopOpacity={0.8}/>
@@ -993,15 +1044,15 @@ export default function Dashboard() {
           )}
 
           <div className="secondary-charts">
-            {/* Bookings Status Distribution */}
-            {analysisData.bookingsByStatus && (
+            {/* Distribution */}
+            {statusData.length > 0 && (
               <div className="chart-card half">
-                <h4>Booking Status Distribution</h4>
+                <h4>Status Distribution</h4>
                 <div style={{ width: '100%', height: 250 }}>
                   <ResponsiveContainer>
                     <PieChart>
                       <Pie
-                        data={analysisData.bookingsByStatus}
+                        data={statusData}
                         cx="50%"
                         cy="50%"
                         innerRadius={60}
@@ -1009,7 +1060,7 @@ export default function Dashboard() {
                         paddingAngle={5}
                         dataKey="value"
                       >
-                        {analysisData.bookingsByStatus.map((entry, index) => (
+                        {statusData.map((entry, index) => (
                           <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                         ))}
                       </Pie>
@@ -1023,20 +1074,21 @@ export default function Dashboard() {
               </div>
             )}
 
-            {/* Billboard Popularity */}
-            {analysisData.topBillboards && (
+            {/* Top Performing */}
+            {topPerforming.length > 0 && (
               <div className="chart-card half">
-                <h4>Top Performing Billboards</h4>
+                <h4>Top Performing</h4>
                 <div style={{ width: '100%', height: 250 }}>
                   <ResponsiveContainer>
-                    <BarChart data={analysisData.topBillboards} layout="vertical">
+                    <BarChart data={topPerforming} layout="vertical">
                       <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#374151" />
                       <XAxis type="number" hide />
-                      <YAxis dataKey="name" type="category" stroke="#9CA3AF" fontSize={10} width={100} />
+                      <YAxis dataKey="name" type="category" stroke="#9CA3AF" fontSize={10} width={100} tickLine={false} axisLine={false} />
                       <Tooltip 
                         contentStyle={{ backgroundColor: '#1F2937', border: 'none', borderRadius: '8px', color: '#fff' }}
+                        cursor={{ fill: 'rgba(255,255,255,0.05)' }}
                       />
-                      <Bar dataKey="bookings" fill="#3B82F6" radius={[0, 4, 4, 0]} />
+                      <Bar dataKey="value" fill="#3B82F6" radius={[0, 4, 4, 0]} barSize={20} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -1044,6 +1096,12 @@ export default function Dashboard() {
             )}
           </div>
         </div>
+        
+        {analysisData.date_range && (
+          <div style={{ gridColumn: '1 / -1', textAlign: 'center', color: '#6B7280', fontSize: '12px', marginTop: '10px' }}>
+            Report Period: {analysisData.date_range} • Generated on {new Date(analysisData.timestamp || Date.now()).toLocaleString()}
+          </div>
+        )}
       </div>
     );
   };
