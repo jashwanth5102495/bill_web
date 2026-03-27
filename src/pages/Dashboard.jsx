@@ -231,6 +231,26 @@ export default function Dashboard() {
     }
   }, []);
 
+  const handleDownloadCSV = async () => {
+    try {
+      const response = await api.get('/admin/export-bookings-csv', {
+        responseType: 'blob'
+      });
+      
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `bookings_export_${new Date().toISOString().split('T')[0]}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Error downloading CSV:', error);
+      alert('Failed to download CSV');
+    }
+  };
+
   useEffect(() => {
     if (activeTab === 'billboard-owners') {
       fetchOwners();
@@ -813,7 +833,17 @@ export default function Dashboard() {
   const renderRunningAdsContent = () => (
     <div className="list-container">
       <div className="list-header" style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-        <div>Ads & Availability Management</div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>Ads & Availability Management</div>
+          <button 
+            className="btn-primary" 
+            onClick={handleDownloadCSV}
+            style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 16px', fontSize: '14px' }}
+          >
+            <Download size={18} />
+            Download CSV Report
+          </button>
+        </div>
         <div className="tabs" style={{ marginBottom: 0, borderBottom: 'none' }}>
           <div 
             className={`tab ${runningAdsTab === 'bookings' ? 'active' : ''}`}
