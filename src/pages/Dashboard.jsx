@@ -247,7 +247,22 @@ export default function Dashboard() {
       window.URL.revokeObjectURL(url);
     } catch (error) {
       console.error('Error downloading CSV:', error);
-      alert('Failed to download CSV');
+      
+      // Try to extract error message from blob if possible
+      if (error.response?.data instanceof Blob) {
+        const reader = new FileReader();
+        reader.onload = () => {
+          try {
+            const errorData = JSON.parse(reader.result);
+            alert(`Failed to download CSV: ${errorData.message || 'Unknown error'}`);
+          } catch (e) {
+            alert('Failed to download CSV. Please check if there are any bookings to export.');
+          }
+        };
+        reader.readAsText(error.response.data);
+      } else {
+        alert(error.response?.data?.message || 'Failed to download CSV. Please ensure the backend is running.');
+      }
     }
   };
 
