@@ -118,6 +118,7 @@ export default function Dashboard() {
   const fetchAnalysis = useCallback(async () => {
     try {
       const response = await api.get('/admin/latest-analysis');
+      console.log('Fetched analysis:', response.data);
       if (response.data.success && response.data.analysis) {
         setAnalysisData(response.data.analysis);
       }
@@ -321,7 +322,10 @@ export default function Dashboard() {
           setAnalysisData(response.data.analysis);
           alert('Analysis complete! Data has been updated.');
         } else {
-          alert('CSV data has been sent to n8n. Please check back in a few seconds for results.');
+          alert('CSV data has been sent to n8n. Please check back in a few seconds and click Refresh for results.');
+          
+          // Auto-refresh after 5 seconds to try and catch the webhook update
+          setTimeout(fetchAnalysis, 5000);
         }
       } else {
         alert('Failed to send data to n8n: ' + response.data.message);
