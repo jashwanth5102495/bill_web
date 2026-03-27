@@ -266,6 +266,20 @@ export default function Dashboard() {
     }
   };
 
+  const handleAnalyzeWithN8N = async () => {
+    try {
+      const response = await api.post('/admin/analyze-with-n8n');
+      if (response.data.success) {
+        alert('CSV data has been sent to n8n via Telegram for analysis!');
+      } else {
+        alert('Failed to send data to n8n: ' + response.data.message);
+      }
+    } catch (error) {
+      console.error('Error analyzing with n8n:', error);
+      alert(error.response?.data?.message || 'Failed to send data to n8n. Please ensure the backend is running.');
+    }
+  };
+
   useEffect(() => {
     if (activeTab === 'billboard-owners') {
       fetchOwners();
@@ -850,14 +864,24 @@ export default function Dashboard() {
       <div className="list-header" style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>Ads & Availability Management</div>
-          <button 
-            className="btn-primary" 
-            onClick={handleDownloadCSV}
-            style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 16px', fontSize: '14px' }}
-          >
-            <Download size={18} />
-            Download CSV Report
-          </button>
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <button 
+              className="btn-primary" 
+              onClick={handleAnalyzeWithN8N}
+              style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 16px', fontSize: '14px', backgroundColor: '#8B5CF6' }} // Purple for n8n
+            >
+              <PlayCircle size={18} />
+              Analyze with n8n
+            </button>
+            <button 
+              className="btn-primary" 
+              onClick={handleDownloadCSV}
+              style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 16px', fontSize: '14px' }}
+            >
+              <Download size={18} />
+              Download CSV Report
+            </button>
+          </div>
         </div>
         <div className="tabs" style={{ marginBottom: 0, borderBottom: 'none' }}>
           <div 
